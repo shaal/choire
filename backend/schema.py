@@ -25,6 +25,17 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class SimpleSettings(StrictModel):
+    lyrics: str = Field(min_length=1, max_length=400)
+    pace: Literal["slow", "flowing", "bright"] = "flowing"
+    character: Literal["intimate", "warm", "radiant"] = "warm"
+    variation: int = Field(default=0, ge=0, le=1000000)
+
+
+class ArrangeRequest(SimpleSettings):
+    title: str = Field(default="A little light", max_length=100)
+
+
 class Note(StrictModel):
     id: str = Field(min_length=1, max_length=80)
     pitch: int = Field(ge=36, le=84)
@@ -80,6 +91,7 @@ class Score(StrictModel):
     vibrato: float = Field(default=0.35, ge=0, le=1)
     room: float = Field(default=0.3, ge=0, le=1)
     seed: int = Field(default=42, ge=0, le=2**31 - 1)
+    simple: SimpleSettings | None = None
 
     @model_validator(mode="after")
     def check_score(self):

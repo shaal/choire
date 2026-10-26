@@ -26,6 +26,8 @@ import {
   X,
 } from "lucide-react";
 import PianoRoll from "./PianoRoll";
+import SimpleStudio from "./SimpleStudio";
+import useSimpleStudio from "./useSimpleStudio";
 import {
   COLORS,
   VOICES,
@@ -187,6 +189,18 @@ function MiniScore({ track }: { track: Track }) {
   );
 }
 export default function App() {
+  const [mode, setMode] = useState<"simple" | "advanced">(() => {
+    try {
+      const saved = localStorage.getItem("choire.studioMode.v1");
+      return saved === "simple" || saved === "advanced"
+        ? saved
+        : localStorage.getItem("choire.project.v1")
+          ? "advanced"
+          : "simple";
+    } catch {
+      return "simple";
+    }
+  });
   const [history, dispatch] = useReducer(reducer, {
     present: initialScore(),
     past: [],
@@ -204,9 +218,13 @@ export default function App() {
     "loading" | "ready" | "offline" | "setup"
   >("loading");
   const [engineReady, setEngineReady] = useState<Record<string, boolean>>({});
-  const neural = score.engine === "diffsinger";
+  const simpleMode = mode === "simple";
+  const neural = simpleMode || score.engine === "diffsinger";
   const health =
-    connection === "ready" && !engineReady[score.engine] ? "setup" : connection;
+    connection === "ready" &&
+    !engineReady[simpleMode ? "diffsinger" : score.engine]
+      ? "setup"
+      : connection;
   const outsideRange =
     neural && track.notes.some((n) => n.pitch < 55 || n.pitch > 74);
   const [notice, setNotice] = useState("");
@@ -220,6 +238,7 @@ export default function App() {
   const [time, setTime] = useState(0);
   const [busy, setBusy] = useState(false);
   const [restoreReady, setRestoreReady] = useState(false);
+  const guided = useSimpleStudio(score, simpleMode, restoreReady);
   const audio = useRef<HTMLAudioElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const renderKey = useRef("");
@@ -229,7 +248,8 @@ export default function App() {
   scoreRef.current = score;
   const isRendering =
     busy || job?.status === "queued" || job?.status === "rendering";
-  const current = !!rendered && rendered.key === scoreKey;
+  const current =
+    !!rendered && rendered.key === scoreKey && (!simpleMode || !guided.dirty);
   const audible = score.tracks.filter(
     (t) =>
       !t.mute &&
@@ -249,9 +269,19 @@ export default function App() {
     ) * 4,
   );
   const edit = useCallback(
-    (s: Score) => dispatch({ type: "edit", score: s }),
-    [],
+    (s: Score) =>
+      dispatch({
+        type: "edit",
+        score: mode === "advanced" ? { ...s, simple: null } : s,
+      }),
+    [mode],
   );
+  function changeMode(next: "simple" | "advanced") {
+    setMode(next);
+    try {
+      localStorage.setItem("choire.studioMode.v1", next);
+    } catch {}
+  }
   const changeTrack = (patch: Partial<Track>) =>
     edit({
       ...score,
@@ -411,17 +441,17 @@ export default function App() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [current]);
-  async function render(play = false) {
+  async function render(play = false, composition = scoreRef.current) {
     if (isRendering) return;
     setBusy(true);
     setNotice("");
     audio.current?.pause();
     autoplay.current = play;
-    renderKey.current = JSON.stringify(scoreRef.current);
+    renderKey.current = JSON.stringify(composition);
     try {
       const j = await request<{ id: string }>(
         "/api/render",
-        jsonRequest(scoreRef.current),
+        jsonRequest(composition),
       );
       setJob({
         id: j.id,
@@ -435,9 +465,17 @@ export default function App() {
       setBusy(false);
     }
   }
+  function createSimple() {
+    if (!guided.planned || isRendering) return;
+    edit(guided.planned);
+    setActive(guided.planned.tracks[0].id);
+    setSelected(null);
+    void render(true, guided.planned);
+  }
   function playPause() {
     if (!current) {
-      void render(true);
+      if (simpleMode) createSimple();
+      else void render(true);
       return;
     }
     if (audio.current?.paused)
@@ -478,9 +516,13 @@ export default function App() {
     }
   }
   function save() {
+    const savedScore = simpleMode ? guided.planned : score;
+    if (!savedScore) return;
     download(
-      `${score.title || "choire"}.choire.json`,
-      new Blob([JSON.stringify(score, null, 2)], { type: "application/json" }),
+      `${savedScore.title || "choire"}.choire.json`,
+      new Blob([JSON.stringify(savedScore, null, 2)], {
+        type: "application/json",
+      }),
     );
   }
   function preset(name: string) {
@@ -510,7 +552,7 @@ export default function App() {
     });
   }
   return (
-    <div className="studio">
+    <div className={`studio ${mode}-mode`}>
       <header className="app-header">
         <a
           className="brand"
@@ -524,11 +566,21 @@ export default function App() {
           </span>
           <small>STUDIO</small>
         </a>
-        <div className="header-center">
-          <span className="session-dot" />
-          Local session
-          <span className="header-separator" />
-          No cloud required
+        <div className="mode-switch" role="group" aria-label="Studio mode">
+          <button
+            aria-pressed={simpleMode}
+            disabled={!!isRendering}
+            onClick={() => changeMode("simple")}
+          >
+            Simple
+          </button>
+          <button
+            aria-pressed={!simpleMode}
+            disabled={!!isRendering}
+            onClick={() => changeMode("advanced")}
+          >
+            Advanced
+          </button>
         </div>
         <div className="header-actions">
           <button
@@ -625,22 +677,48 @@ export default function App() {
             <FolderOpen size={15} />
             Open <span className="desktop-only">project / MIDI</span>
           </button>
-          <button className="secondary-button" onClick={save}>
+          <button
+            className="secondary-button"
+            onClick={save}
+            disabled={simpleMode && !guided.planned}
+          >
             <Save size={15} />
             Save project
           </button>
-          <button
-            className="primary-button"
-            disabled={!!isRendering || health !== "ready"}
-            onClick={() => render()}
-          >
-            {isRendering ? (
-              <LoaderCircle size={16} className="spin" />
-            ) : (
-              <Waves size={16} />
-            )}{" "}
-            {isRendering ? "Rendering…" : "Render choir"}
-          </button>
+          {simpleMode && (
+            <>
+              <button
+                className="icon-button"
+                aria-label="Undo"
+                disabled={!history.past.length || !!isRendering}
+                onClick={() => dispatch({ type: "undo" })}
+              >
+                <Undo2 size={17} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="Redo"
+                disabled={!history.future.length || !!isRendering}
+                onClick={() => dispatch({ type: "redo" })}
+              >
+                <Redo2 size={17} />
+              </button>
+            </>
+          )}
+          {!simpleMode && (
+            <button
+              className="primary-button"
+              disabled={!!isRendering || health !== "ready"}
+              onClick={() => render()}
+            >
+              {isRendering ? (
+                <LoaderCircle size={16} className="spin" />
+              ) : (
+                <Waves size={16} />
+              )}{" "}
+              {isRendering ? "Rendering…" : "Render choir"}
+            </button>
+          )}
         </div>
       </section>
       {notice && (
@@ -669,528 +747,557 @@ export default function App() {
           then restart the application.
         </div>
       )}
-      <main className="workspace">
-        <aside className="parts-panel">
-          <div className="panel-heading">
-            <h2>Ensemble</h2>
-            <span>{singerCount} voices</span>
-          </div>
-          <div className="parts-list">
-            {score.tracks.map((t, i) => (
-              <div
-                key={t.id}
-                className={`part-strip ${track.id === t.id ? "active" : ""} ${t.mute ? "muted" : ""}`}
-                style={{ "--part-color": COLORS[t.part] } as CSSProperties}
-              >
-                <button
-                  className="part-select"
-                  onClick={() => {
-                    setActive(t.id);
-                    setSelected(null);
-                  }}
-                  aria-pressed={track.id === t.id}
+      {simpleMode ? (
+        <SimpleStudio
+          settings={guided.settings}
+          onChange={guided.setSettings}
+          planned={guided.planned}
+          planning={guided.planning}
+          error={guided.error}
+          dirty={guided.dirty}
+          rendering={!!isRendering}
+          ready={health === "ready" && restoreReady}
+          onCreate={createSimple}
+          onAdvanced={() => {
+            if (!guided.planned) return;
+            edit(guided.planned);
+            setActive(guided.planned.tracks[0].id);
+            setSelected(null);
+            changeMode("advanced");
+          }}
+        />
+      ) : (
+        <main className="workspace">
+          <aside className="parts-panel">
+            <div className="panel-heading">
+              <h2>Ensemble</h2>
+              <span>{singerCount} voices</span>
+            </div>
+            <div className="parts-list">
+              {score.tracks.map((t, i) => (
+                <div
+                  key={t.id}
+                  className={`part-strip ${track.id === t.id ? "active" : ""} ${t.mute ? "muted" : ""}`}
+                  style={{ "--part-color": COLORS[t.part] } as CSSProperties}
                 >
-                  <div className="part-title">
-                    <span className="part-number">0{i + 1}</span>
-                    <span>{t.name}</span>
-                    <span className="part-color-dot" />
-                  </div>
-                  <span className="part-subtitle">
-                    {t.singers === 1 ? "Solo voice" : `${t.singers} singers`}{" "}
-                    <span>
-                      ·{" "}
-                      {t.part === "soprano" || t.part === "alto"
-                        ? "Upper register"
-                        : "Lower register"}
-                    </span>
-                  </span>
-                  <MiniScore track={t} />
-                </button>
-                <div className="part-controls">
                   <button
-                    className={t.mute ? "lit" : ""}
-                    aria-label={`Mute ${t.name}`}
-                    aria-pressed={t.mute}
-                    onClick={() => changeAnyTrack(t.id, { mute: !t.mute })}
-                  >
-                    M
-                  </button>
-                  <button
-                    className={t.solo ? "lit" : ""}
-                    aria-label={`Solo ${t.name}`}
-                    aria-pressed={t.solo}
-                    onClick={() => changeAnyTrack(t.id, { solo: !t.solo })}
-                  >
-                    S
-                  </button>
-                  <Volume2 size={12} />
-                  <input
-                    type="range"
-                    aria-label={`${t.name} volume`}
-                    min="0"
-                    max="1.5"
-                    step=".01"
-                    value={t.gain}
-                    onChange={(e) =>
-                      changeAnyTrack(t.id, { gain: +e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="ensemble-preset">
-            <span className="eyebrow">START WITH A SOUND</span>
-            <button onClick={() => preset("chamber")}>
-              <span>
-                Chamber ensemble<small>Intimate & articulate</small>
-              </span>
-              <span>12</span>
-            </button>
-            <button onClick={() => preset("hall")}>
-              <span>
-                Concert hall<small>Wide & expressive</small>
-              </span>
-              <span>32</span>
-            </button>
-            <button onClick={() => preset("solo")}>
-              <span>
-                Solo quartet<small>One voice per part</small>
-              </span>
-              <span>04</span>
-            </button>
-          </div>
-          <div className="sidebar-bottom">
-            <Headphones size={17} />
-            <p>
-              A little space. A lot of voices.
-              <br />
-              <span>Headphones recommended.</span>
-            </p>
-          </div>
-        </aside>
-        <section className="score-panel" aria-label="Score editor">
-          <div className="score-toolbar">
-            <div className="score-tabs">
-              <span className="active">
-                <Music2 size={15} />
-                Piano roll
-              </span>
-              <span
-                className="current-part"
-                style={{ color: COLORS[track.part] }}
-              >
-                {track.name}
-              </span>
-            </div>
-            <div className="edit-tools">
-              <button
-                className="icon-button"
-                aria-label="Undo"
-                title="Undo (⌘Z)"
-                disabled={!history.past.length}
-                onClick={() => dispatch({ type: "undo" })}
-              >
-                <Undo2 size={16} />
-              </button>
-              <button
-                className="icon-button"
-                aria-label="Redo"
-                title="Redo (⇧⌘Z)"
-                disabled={!history.future.length}
-                onClick={() => dispatch({ type: "redo" })}
-              >
-                <Redo2 size={16} />
-              </button>
-              <span className="toolbar-divider" />
-              <label>
-                Snap{" "}
-                <select
-                  aria-label="Snap resolution"
-                  value={snap}
-                  onChange={(e) => setSnap(+e.target.value)}
-                >
-                  <option value={1}>1 beat</option>
-                  <option value={0.5}>½ beat</option>
-                  <option value={0.25}>¼ beat</option>
-                </select>
-              </label>
-              <button
-                className="icon-button"
-                aria-label="Zoom out"
-                disabled={zoom <= 0.5}
-                onClick={() => setZoom((z) => z / 1.5)}
-              >
-                <Minus size={14} />
-              </button>
-              <button
-                className="icon-button"
-                aria-label="Zoom in"
-                disabled={zoom >= 3}
-                onClick={() => setZoom((z) => z * 1.5)}
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-          </div>
-          <PianoRoll
-            track={track}
-            tracks={score.tracks}
-            selected={selected}
-            onSelect={setSelected}
-            onNotes={(notes) => changeTrack({ notes })}
-            onError={setNotice}
-            beat={(time * score.bpm) / 60}
-            snap={snap}
-            zoom={zoom}
-            length={length}
-          />
-          <div className="roll-caption">
-            <span>
-              <i style={{ background: COLORS[track.part] }} />
-              {track.notes.length} notes{" "}
-              <span className="caption-divider">/</span>
-              {length / 4} bars
-            </span>
-            <span>Click to add · Drag to move · Drag edge to resize</span>
-            <button
-              className="add-note-button"
-              onClick={() => {
-                const start = Math.max(
-                  0,
-                  ...track.notes.map((n) => n.start + n.duration),
-                );
-                if (start + 1 > 128) {
-                  setNotice("This score is limited to 128 beats.");
-                  return;
-                }
-                const n = {
-                  id: newId(),
-                  start,
-                  duration: 1,
-                  pitch: note?.pitch || track.notes.at(-1)?.pitch || 60,
-                  lyric: "ah",
-                  velocity: 0.8,
-                };
-                changeTrack({ notes: [...track.notes, n] });
-                setSelected(n.id);
-              }}
-            >
-              + Note
-            </button>
-          </div>
-          <div className="lyrics-panel">
-            <div className="lyrics-heading">
-              <h3>
-                Lyrics <span>{track.name}</span>
-              </h3>
-              <span>
-                {neural
-                  ? "One English word per note"
-                  : "One word or syllable per note"}
-              </span>
-            </div>
-            <div className="lyrics-input">
-              <input
-                aria-label="Part lyrics"
-                value={lyrics}
-                maxLength={5000}
-                onChange={(e) => setLyrics(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter")
-                    changeTrack(assignLyrics(track, lyrics));
-                }}
-                placeholder="May our light shine on"
-              />
-              <button
-                disabled={!track.notes.length}
-                onClick={() => {
-                  const count = lyrics
-                    .trim()
-                    .split(/[\s\-]+/)
-                    .filter(Boolean).length;
-                  changeTrack(assignLyrics(track, lyrics));
-                  if (count !== track.notes.length)
-                    setNotice(
-                      `${Math.min(count, track.notes.length)} lyrics assigned to ${track.notes.length} notes. Extra words are ignored; remaining notes keep their lyrics.`,
-                    );
-                }}
-              >
-                Apply lyrics <span>↵</span>
-              </button>
-            </div>
-            <div className="lyric-hint">
-              {neural ? (
-                <>
-                  Use English dictionary words, or vowels like{" "}
-                  <span>ah, oh, oo, la</span>.
-                </>
-              ) : (
-                <>
-                  Separate syllables with hyphens, like <span>to-geth-er</span>.
-                </>
-              )}{" "}
-              Select a note to edit it individually.
-            </div>
-          </div>
-          <div className="note-inspector">
-            <div>
-              <span className="eyebrow">
-                {note ? "SELECTED NOTE" : "NOTE INSPECTOR"}
-              </span>
-              <strong>{note ? noteName(note.pitch) : "Select a note"}</strong>
-            </div>
-            {note ? (
-              <>
-                <label>
-                  Lyric
-                  <input
-                    aria-label="Selected note lyric"
-                    maxLength={40}
-                    value={note.lyric}
-                    onChange={(e) => {
-                      if (e.target.value.trim())
-                        changeNote({ lyric: e.target.value });
+                    className="part-select"
+                    onClick={() => {
+                      setActive(t.id);
+                      setSelected(null);
                     }}
-                  />
-                </label>
-                <label>
-                  Pitch
-                  <select
-                    aria-label="Selected note pitch"
-                    value={note.pitch}
-                    onChange={(e) => changeNote({ pitch: +e.target.value })}
+                    aria-pressed={track.id === t.id}
                   >
-                    {Array.from({ length: 49 }, (_, i) => 36 + i).map((p) => (
-                      <option key={p} value={p}>
-                        {noteName(p)}
-                      </option>
-                    ))}
+                    <div className="part-title">
+                      <span className="part-number">0{i + 1}</span>
+                      <span>{t.name}</span>
+                      <span className="part-color-dot" />
+                    </div>
+                    <span className="part-subtitle">
+                      {t.singers === 1 ? "Solo voice" : `${t.singers} singers`}{" "}
+                      <span>
+                        ·{" "}
+                        {t.part === "soprano" || t.part === "alto"
+                          ? "Upper register"
+                          : "Lower register"}
+                      </span>
+                    </span>
+                    <MiniScore track={t} />
+                  </button>
+                  <div className="part-controls">
+                    <button
+                      className={t.mute ? "lit" : ""}
+                      aria-label={`Mute ${t.name}`}
+                      aria-pressed={t.mute}
+                      onClick={() => changeAnyTrack(t.id, { mute: !t.mute })}
+                    >
+                      M
+                    </button>
+                    <button
+                      className={t.solo ? "lit" : ""}
+                      aria-label={`Solo ${t.name}`}
+                      aria-pressed={t.solo}
+                      onClick={() => changeAnyTrack(t.id, { solo: !t.solo })}
+                    >
+                      S
+                    </button>
+                    <Volume2 size={12} />
+                    <input
+                      type="range"
+                      aria-label={`${t.name} volume`}
+                      min="0"
+                      max="1.5"
+                      step=".01"
+                      value={t.gain}
+                      onChange={(e) =>
+                        changeAnyTrack(t.id, { gain: +e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="ensemble-preset">
+              <span className="eyebrow">START WITH A SOUND</span>
+              <button onClick={() => preset("chamber")}>
+                <span>
+                  Chamber ensemble<small>Intimate & articulate</small>
+                </span>
+                <span>12</span>
+              </button>
+              <button onClick={() => preset("hall")}>
+                <span>
+                  Concert hall<small>Wide & expressive</small>
+                </span>
+                <span>32</span>
+              </button>
+              <button onClick={() => preset("solo")}>
+                <span>
+                  Solo quartet<small>One voice per part</small>
+                </span>
+                <span>04</span>
+              </button>
+            </div>
+            <div className="sidebar-bottom">
+              <Headphones size={17} />
+              <p>
+                A little space. A lot of voices.
+                <br />
+                <span>Headphones recommended.</span>
+              </p>
+            </div>
+          </aside>
+          <section className="score-panel" aria-label="Score editor">
+            <div className="score-toolbar">
+              <div className="score-tabs">
+                <span className="active">
+                  <Music2 size={15} />
+                  Piano roll
+                </span>
+                <span
+                  className="current-part"
+                  style={{ color: COLORS[track.part] }}
+                >
+                  {track.name}
+                </span>
+              </div>
+              <div className="edit-tools">
+                <button
+                  className="icon-button"
+                  aria-label="Undo"
+                  title="Undo (⌘Z)"
+                  disabled={!history.past.length}
+                  onClick={() => dispatch({ type: "undo" })}
+                >
+                  <Undo2 size={16} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Redo"
+                  title="Redo (⇧⌘Z)"
+                  disabled={!history.future.length}
+                  onClick={() => dispatch({ type: "redo" })}
+                >
+                  <Redo2 size={16} />
+                </button>
+                <span className="toolbar-divider" />
+                <label>
+                  Snap{" "}
+                  <select
+                    aria-label="Snap resolution"
+                    value={snap}
+                    onChange={(e) => setSnap(+e.target.value)}
+                  >
+                    <option value={1}>1 beat</option>
+                    <option value={0.5}>½ beat</option>
+                    <option value={0.25}>¼ beat</option>
                   </select>
                 </label>
-                <label>
-                  Start beat
-                  <input
-                    aria-label="Selected note start"
-                    type="number"
-                    min="1"
-                    max="128"
-                    step={snap}
-                    value={note.start + 1}
-                    onChange={(e) => {
-                      if (e.target.value)
-                        changeNote({ start: +e.target.value - 1 });
-                    }}
-                  />
-                </label>
-                <label>
-                  Length
-                  <input
-                    aria-label="Selected note duration"
-                    type="number"
-                    min=".25"
-                    max="16"
-                    step={snap}
-                    value={note.duration}
-                    onChange={(e) => {
-                      if (e.target.value)
-                        changeNote({ duration: +e.target.value });
-                    }}
-                  />
-                </label>
                 <button
-                  className="icon-button delete-note"
-                  aria-label="Delete selected note"
+                  className="icon-button"
+                  aria-label="Zoom out"
+                  disabled={zoom <= 0.5}
+                  onClick={() => setZoom((z) => z / 1.5)}
+                >
+                  <Minus size={14} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Zoom in"
+                  disabled={zoom >= 3}
+                  onClick={() => setZoom((z) => z * 1.5)}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+            <PianoRoll
+              track={track}
+              tracks={score.tracks}
+              selected={selected}
+              onSelect={setSelected}
+              onNotes={(notes) => changeTrack({ notes })}
+              onError={setNotice}
+              beat={(time * score.bpm) / 60}
+              snap={snap}
+              zoom={zoom}
+              length={length}
+            />
+            <div className="roll-caption">
+              <span>
+                <i style={{ background: COLORS[track.part] }} />
+                {track.notes.length} notes{" "}
+                <span className="caption-divider">/</span>
+                {length / 4} bars
+              </span>
+              <span>Click to add · Drag to move · Drag edge to resize</span>
+              <button
+                className="add-note-button"
+                onClick={() => {
+                  const start = Math.max(
+                    0,
+                    ...track.notes.map((n) => n.start + n.duration),
+                  );
+                  if (start + 1 > 128) {
+                    setNotice("This score is limited to 128 beats.");
+                    return;
+                  }
+                  const n = {
+                    id: newId(),
+                    start,
+                    duration: 1,
+                    pitch: note?.pitch || track.notes.at(-1)?.pitch || 60,
+                    lyric: "ah",
+                    velocity: 0.8,
+                  };
+                  changeTrack({ notes: [...track.notes, n] });
+                  setSelected(n.id);
+                }}
+              >
+                + Note
+              </button>
+            </div>
+            <div className="lyrics-panel">
+              <div className="lyrics-heading">
+                <h3>
+                  Lyrics <span>{track.name}</span>
+                </h3>
+                <span>
+                  {neural
+                    ? "One English word per note"
+                    : "One word or syllable per note"}
+                </span>
+              </div>
+              <div className="lyrics-input">
+                <input
+                  aria-label="Part lyrics"
+                  value={lyrics}
+                  maxLength={5000}
+                  onChange={(e) => setLyrics(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      changeTrack(assignLyrics(track, lyrics));
+                  }}
+                  placeholder="May our light shine on"
+                />
+                <button
+                  disabled={!track.notes.length}
                   onClick={() => {
-                    changeTrack({
-                      notes: track.notes.filter((n) => n.id !== note.id),
-                    });
-                    setSelected(null);
+                    const count = lyrics
+                      .trim()
+                      .split(/[\s\-]+/)
+                      .filter(Boolean).length;
+                    changeTrack(assignLyrics(track, lyrics));
+                    if (count !== track.notes.length)
+                      setNotice(
+                        `${Math.min(count, track.notes.length)} lyrics assigned to ${track.notes.length} notes. Extra words are ignored; remaining notes keep their lyrics.`,
+                      );
                   }}
                 >
-                  <Trash2 size={16} />
+                  Apply lyrics <span>↵</span>
                 </button>
-              </>
-            ) : (
-              <p>
-                Use arrow keys to move a focused note.
-                <br />
-                Shift + ↑ / ↓ moves an octave. Delete removes it.
-              </p>
-            )}
-          </div>
-        </section>
-        <aside className="sound-panel">
-          <div className="panel-heading">
-            <h2>Voice & expression</h2>
-            <SlidersHorizontal size={15} />
-          </div>
-          <div className="sound-content">
-            <div className="voice-choices">
-              <label className="voice-select-label">
-                SINGING ENGINE
-                <select
-                  aria-label="Singing engine"
-                  value={score.engine}
-                  disabled={!!isRendering}
-                  onChange={(e) =>
-                    edit(switchEngine(score, e.target.value as Score["engine"]))
-                  }
-                >
-                  <option value="diffsinger">
-                    Neural singing · DiffSinger
-                  </option>
-                  <option value="kokoro-world">
-                    Original · speech-to-singing
-                  </option>
-                </select>
-              </label>
-              <label className="voice-select-label">
-                VOICE COLOR
-                <select
-                  aria-label="Voice color"
-                  value={track.voice}
-                  onChange={(e) => changeTrack({ voice: e.target.value })}
-                >
-                  {Object.entries(neural ? SINGING_VOICES : VOICES).map(
-                    ([v, n]) => (
-                      <option key={v} value={v}>
-                        {n}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-              {neural && (
-                <p className="voice-note">
-                  Nishiren by Gardanana · one voice, four styles.
-                  <br />
-                  Non-commercial use.{" "}
-                  <a
-                    href="https://github.com/Gardanana/Nishiren-AI-Diffsinger/blob/main/terms-of-service.md"
-                    target="_blank"
-                    rel="noreferrer"
+              </div>
+              <div className="lyric-hint">
+                {neural ? (
+                  <>
+                    Use English dictionary words, or vowels like{" "}
+                    <span>ah, oh, oo, la</span>.
+                  </>
+                ) : (
+                  <>
+                    Separate syllables with hyphens, like{" "}
+                    <span>to-geth-er</span>.
+                  </>
+                )}{" "}
+                Select a note to edit it individually.
+              </div>
+            </div>
+            <div className="note-inspector">
+              <div>
+                <span className="eyebrow">
+                  {note ? "SELECTED NOTE" : "NOTE INSPECTOR"}
+                </span>
+                <strong>{note ? noteName(note.pitch) : "Select a note"}</strong>
+              </div>
+              {note ? (
+                <>
+                  <label>
+                    Lyric
+                    <input
+                      aria-label="Selected note lyric"
+                      maxLength={40}
+                      value={note.lyric}
+                      onChange={(e) => {
+                        if (e.target.value.trim())
+                          changeNote({ lyric: e.target.value });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Pitch
+                    <select
+                      aria-label="Selected note pitch"
+                      value={note.pitch}
+                      onChange={(e) => changeNote({ pitch: +e.target.value })}
+                    >
+                      {Array.from({ length: 49 }, (_, i) => 36 + i).map((p) => (
+                        <option key={p} value={p}>
+                          {noteName(p)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Start beat
+                    <input
+                      aria-label="Selected note start"
+                      type="number"
+                      min="1"
+                      max="128"
+                      step={snap}
+                      value={note.start + 1}
+                      onChange={(e) => {
+                        if (e.target.value)
+                          changeNote({ start: +e.target.value - 1 });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Length
+                    <input
+                      aria-label="Selected note duration"
+                      type="number"
+                      min=".25"
+                      max="16"
+                      step={snap}
+                      value={note.duration}
+                      onChange={(e) => {
+                        if (e.target.value)
+                          changeNote({ duration: +e.target.value });
+                      }}
+                    />
+                  </label>
+                  <button
+                    className="icon-button delete-note"
+                    aria-label="Delete selected note"
+                    onClick={() => {
+                      changeTrack({
+                        notes: track.notes.filter((n) => n.id !== note.id),
+                      });
+                      setSelected(null);
+                    }}
                   >
-                    Usage terms
-                  </a>
-                  {outsideRange && (
-                    <span className="range-note">
-                      This part reaches beyond G3–D5. Vocal quality may vary.
-                    </span>
-                  )}
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              ) : (
+                <p>
+                  Use arrow keys to move a focused note.
+                  <br />
+                  Shift + ↑ / ↓ moves an octave. Delete removes it.
                 </p>
               )}
             </div>
-            <div className="singers-heading">
-              <span>Singers in {track.name.toLowerCase()}</span>
-              <strong>{String(track.singers).padStart(2, "0")}</strong>
+          </section>
+          <aside className="sound-panel">
+            <div className="panel-heading">
+              <h2>Voice & expression</h2>
+              <SlidersHorizontal size={15} />
             </div>
-            <div
-              className="singer-stage"
-              aria-label={`${track.singers} singers in this part`}
-            >
-              <div className="stage-arc arc-one" />
-              <div className="stage-arc arc-two" />
-              {Array.from({ length: track.singers }, (_, i) => {
-                const row = i < 8 ? 0 : 1;
-                const count =
-                  row === 0 ? Math.min(track.singers, 8) : track.singers - 8;
-                const index = row === 0 ? i : i - 8;
-                const angle =
-                  count === 1 ? 0 : (index / (count - 1) - 0.5) * 1.7;
-                return (
-                  <span
-                    className="singer-dot"
-                    key={i}
-                    style={{
-                      left: `${50 + Math.sin(angle) * (row ? 43 : 34)}%`,
-                      top: `${(row ? 12 : 32) + (1 - Math.cos(angle)) * 32}%`,
-                      background: COLORS[track.part],
-                    }}
-                  />
-                );
-              })}
-              <div className="conductor">⌁</div>
-              <span className="stage-label">ENSEMBLE POSITION</span>
+            <div className="sound-content">
+              <div className="voice-choices">
+                <label className="voice-select-label">
+                  SINGING ENGINE
+                  <select
+                    aria-label="Singing engine"
+                    value={score.engine}
+                    disabled={!!isRendering}
+                    onChange={(e) =>
+                      edit(
+                        switchEngine(score, e.target.value as Score["engine"]),
+                      )
+                    }
+                  >
+                    <option value="diffsinger">
+                      Neural singing · DiffSinger
+                    </option>
+                    <option value="kokoro-world">
+                      Original · speech-to-singing
+                    </option>
+                  </select>
+                </label>
+                <label className="voice-select-label">
+                  VOICE COLOR
+                  <select
+                    aria-label="Voice color"
+                    value={track.voice}
+                    onChange={(e) => changeTrack({ voice: e.target.value })}
+                  >
+                    {Object.entries(neural ? SINGING_VOICES : VOICES).map(
+                      ([v, n]) => (
+                        <option key={v} value={v}>
+                          {n}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                {neural && (
+                  <p className="voice-note">
+                    Nishiren by Gardanana · one voice, four styles.
+                    <br />
+                    Non-commercial use.{" "}
+                    <a
+                      href="https://github.com/Gardanana/Nishiren-AI-Diffsinger/blob/main/terms-of-service.md"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Usage terms
+                    </a>
+                    {outsideRange && (
+                      <span className="range-note">
+                        This part reaches beyond G3–D5. Vocal quality may vary.
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div className="singers-heading">
+                <span>Singers in {track.name.toLowerCase()}</span>
+                <strong>{String(track.singers).padStart(2, "0")}</strong>
+              </div>
+              <div
+                className="singer-stage"
+                aria-label={`${track.singers} singers in this part`}
+              >
+                <div className="stage-arc arc-one" />
+                <div className="stage-arc arc-two" />
+                {Array.from({ length: track.singers }, (_, i) => {
+                  const row = i < 8 ? 0 : 1;
+                  const count =
+                    row === 0 ? Math.min(track.singers, 8) : track.singers - 8;
+                  const index = row === 0 ? i : i - 8;
+                  const angle =
+                    count === 1 ? 0 : (index / (count - 1) - 0.5) * 1.7;
+                  return (
+                    <span
+                      className="singer-dot"
+                      key={i}
+                      style={{
+                        left: `${50 + Math.sin(angle) * (row ? 43 : 34)}%`,
+                        top: `${(row ? 12 : 32) + (1 - Math.cos(angle)) * 32}%`,
+                        background: COLORS[track.part],
+                      }}
+                    />
+                  );
+                })}
+                <div className="conductor">⌁</div>
+                <span className="stage-label">ENSEMBLE POSITION</span>
+              </div>
+              <Slider
+                label="Ensemble size"
+                value={track.singers}
+                min={1}
+                max={16}
+                step={1}
+                onChange={(singers) => changeTrack({ singers })}
+                display={
+                  track.singers === 1 ? "Solo" : `${track.singers} voices`
+                }
+              />
+              <Slider
+                label="Pan"
+                value={track.pan}
+                min={-1}
+                max={1}
+                onChange={(pan) => changeTrack({ pan })}
+                display={
+                  track.pan === 0
+                    ? "Center"
+                    : `${Math.round(Math.abs(track.pan) * 100)}${track.pan < 0 ? "L" : "R"}`
+                }
+              />
+              <Slider
+                label="Part volume"
+                value={track.gain}
+                min={0}
+                max={1.5}
+                onChange={(gain) => changeTrack({ gain })}
+                display={`${Math.round(track.gain * 100)}%`}
+              />
+              <div className="sound-divider" />
+              <div className="section-label">
+                ENSEMBLE EXPRESSION <span>All parts</span>
+              </div>
+              <Slider
+                label="Pitch variation"
+                value={score.dispersion}
+                onChange={(dispersion) => edit({ ...score, dispersion })}
+                display={`${Math.round(score.dispersion * 100)}%`}
+                hint="Precise unison → natural differences"
+              />
+              <Slider
+                label="Timing variation"
+                value={score.timing}
+                onChange={(timing) => edit({ ...score, timing })}
+                display={`${Math.round(score.timing * 100)}%`}
+              />
+              <Slider
+                label={neural ? "Pitch expression" : "Vibrato"}
+                value={score.vibrato}
+                onChange={(vibrato) => edit({ ...score, vibrato })}
+                display={`${Math.round(score.vibrato * 100)}%`}
+                hint={
+                  neural ? "Straight notes → learned pitch movement" : undefined
+                }
+              />
+              <Slider
+                label="Room ambience"
+                value={score.room}
+                onChange={(room) => edit({ ...score, room })}
+                display={`${Math.round(score.room * 100)}%`}
+              />
+              <button
+                className="retake-button"
+                onClick={() =>
+                  edit({
+                    ...score,
+                    seed: Math.floor(Math.random() * 2147483647),
+                  })
+                }
+              >
+                <Shuffle size={14} />
+                New performance <span>↗</span>
+              </button>
+              <p className="retake-hint">
+                Vary each singer’s phrasing.
+                <br />
+                Your notes and lyrics stay the same.
+              </p>
             </div>
-            <Slider
-              label="Ensemble size"
-              value={track.singers}
-              min={1}
-              max={16}
-              step={1}
-              onChange={(singers) => changeTrack({ singers })}
-              display={track.singers === 1 ? "Solo" : `${track.singers} voices`}
-            />
-            <Slider
-              label="Pan"
-              value={track.pan}
-              min={-1}
-              max={1}
-              onChange={(pan) => changeTrack({ pan })}
-              display={
-                track.pan === 0
-                  ? "Center"
-                  : `${Math.round(Math.abs(track.pan) * 100)}${track.pan < 0 ? "L" : "R"}`
-              }
-            />
-            <Slider
-              label="Part volume"
-              value={track.gain}
-              min={0}
-              max={1.5}
-              onChange={(gain) => changeTrack({ gain })}
-              display={`${Math.round(track.gain * 100)}%`}
-            />
-            <div className="sound-divider" />
-            <div className="section-label">
-              ENSEMBLE EXPRESSION <span>All parts</span>
-            </div>
-            <Slider
-              label="Pitch variation"
-              value={score.dispersion}
-              onChange={(dispersion) => edit({ ...score, dispersion })}
-              display={`${Math.round(score.dispersion * 100)}%`}
-              hint="Precise unison → natural differences"
-            />
-            <Slider
-              label="Timing variation"
-              value={score.timing}
-              onChange={(timing) => edit({ ...score, timing })}
-              display={`${Math.round(score.timing * 100)}%`}
-            />
-            <Slider
-              label={neural ? "Pitch expression" : "Vibrato"}
-              value={score.vibrato}
-              onChange={(vibrato) => edit({ ...score, vibrato })}
-              display={`${Math.round(score.vibrato * 100)}%`}
-              hint={
-                neural ? "Straight notes → learned pitch movement" : undefined
-              }
-            />
-            <Slider
-              label="Room ambience"
-              value={score.room}
-              onChange={(room) => edit({ ...score, room })}
-              display={`${Math.round(score.room * 100)}%`}
-            />
-            <button
-              className="retake-button"
-              onClick={() =>
-                edit({ ...score, seed: Math.floor(Math.random() * 2147483647) })
-              }
-            >
-              <Shuffle size={14} />
-              New performance <span>↗</span>
-            </button>
-            <p className="retake-hint">
-              Vary each singer’s phrasing.
-              <br />
-              Your notes and lyrics stay the same.
-            </p>
-          </div>
-        </aside>
-      </main>
+          </aside>
+        </main>
+      )}
       <section className="transport" aria-label="Playback and export">
         <div className="transport-left">
           <button
@@ -1204,7 +1311,11 @@ export default function App() {
             className="play-button"
             aria-label={playing ? "Pause" : "Play choir"}
             onClick={playPause}
-            disabled={!!isRendering || health !== "ready"}
+            disabled={
+              !!isRendering ||
+              health !== "ready" ||
+              (simpleMode && !guided.planned)
+            }
           >
             {isRendering ? (
               <LoaderCircle className="spin" size={19} />
@@ -1217,27 +1328,53 @@ export default function App() {
           <div className="time-display">
             {fmt(time)}
             <span>
-              / {fmt(rendered?.result.duration || (length * 60) / score.bpm)}
+              /{" "}
+              {fmt(
+                current && rendered
+                  ? rendered.result.duration
+                  : simpleMode && guided.planned
+                    ? (Math.max(
+                        ...guided.planned.tracks[0].notes.map(
+                          (n) => n.start + n.duration,
+                        ),
+                      ) *
+                        60) /
+                        guided.planned.bpm +
+                      2
+                    : (length * 60) / score.bpm,
+              )}
             </span>
           </div>
           <span className="transport-divider" />
-          <label className="tempo">
-            <input
-              aria-label="Tempo BPM"
-              type="number"
-              min="40"
-              max="200"
-              value={score.bpm}
-              onChange={(e) => {
-                const v = +e.target.value;
-                if (v >= 40 && v <= 200) edit({ ...score, bpm: v });
-              }}
-            />
-            <span>BPM</span>
-          </label>
-          <div className="time-signature">
-            4/4<span>SIGNATURE</span>
-          </div>
+          {simpleMode ? (
+            <span className="simple-tempo">
+              {guided.settings.pace === "slow"
+                ? "Unhurried"
+                : guided.settings.pace === "bright"
+                  ? "Bright"
+                  : "Flowing"}
+            </span>
+          ) : (
+            <>
+              <label className="tempo">
+                <input
+                  aria-label="Tempo BPM"
+                  type="number"
+                  min="40"
+                  max="200"
+                  value={score.bpm}
+                  onChange={(e) => {
+                    const v = +e.target.value;
+                    if (v >= 40 && v <= 200) edit({ ...score, bpm: v });
+                  }}
+                />
+                <span>BPM</span>
+              </label>
+              <div className="time-signature">
+                4/4<span>SIGNATURE</span>
+              </div>
+            </>
+          )}
         </div>
         <div className="render-display">
           {isRendering ? (
@@ -1294,7 +1431,9 @@ export default function App() {
                     ? "Rendered · 24-bit stereo WAV"
                     : rendered
                       ? "Score changed · render to hear your edits"
-                      : "Your choir is waiting. Render to hear it."}
+                      : simpleMode
+                        ? "Create your choir, then listen here."
+                        : "Your choir is waiting. Render to hear it."}
                 </span>
                 {current && (
                   <span>{rendered?.result.elapsed.toFixed(1)}s render</span>
@@ -1304,14 +1443,16 @@ export default function App() {
           )}
         </div>
         <div className="export-controls">
-          <button
-            className="icon-button"
-            aria-label="Export MIDI"
-            title="Export notes as MIDI"
-            onClick={() => exportMidi(score)}
-          >
-            <FileMusic size={18} />
-          </button>
+          {!simpleMode && (
+            <button
+              className="icon-button"
+              aria-label="Export MIDI"
+              title="Export notes as MIDI"
+              onClick={() => exportMidi(score)}
+            >
+              <FileMusic size={18} />
+            </button>
+          )}
           <a
             role="link"
             className={`secondary-button ${!current ? "disabled" : ""}`}

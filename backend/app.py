@@ -11,7 +11,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from .engine import ChoirEngine, RenderCancelled, ROOT
-from .schema import Score, VOICES, SINGING_VOICES
+from .schema import Score, VOICES, SINGING_VOICES, ArrangeRequest
+from .arrange import arrange
 from .singing import SingingEngine
 
 app = FastAPI(title="Choire", version="0.1.0")
@@ -68,6 +69,19 @@ def health():
 @app.post("/api/validate")
 def validate(score: Score):
     return score
+
+
+@app.post("/api/arrange")
+def arrange_score(settings: ArrangeRequest):
+    if not singing_engine.available:
+        raise HTTPException(
+            503,
+            "Simple studio needs the singing voice. Run npm run setup:singing, then reload.",
+        )
+    try:
+        return arrange(settings, singing_engine.pronounce)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @app.post("/api/render", status_code=202)

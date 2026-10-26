@@ -14,6 +14,7 @@ const page = await browser.newPage({
 try {
   await page.goto("http://127.0.0.1:8765");
   await page.getByText("Voice engine ready", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
   await page.getByRole("button", { name: "+ Note", exact: true }).click();
   assert.equal(await page.getByLabel("Selected note start").inputValue(), "17");
   assert.equal(

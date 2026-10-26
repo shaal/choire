@@ -2,6 +2,14 @@
 
 Checks performed on an Apple M3 Max Mac, Node 22.22.3 and Python 3.12.
 
+## Simple studio update
+
+The Simple / Advanced switch and guided arranger were verified with 19 backend tests, 4 frontend tests, and all four browser suites. The new tests exercise 54 combinations of pace, character, and melody variation, verifying complete lyric coverage, consonant harmony, G3–D5 range, breathing gaps, bounded durations, and compatible saved scores. Empty, excessive, unsupported, or unknown lyrics are rejected before rendering.
+
+The real browser workflow entered “Let the morning find us here,” selected Bright / Warm, rendered eight neural performances, observed automatic playback, and downloaded an 8.923-second 44.1 kHz stereo PCM-24 WAV. Peak amplitude was 0.6414. Local Whisper small.en transcribed the intended line correctly. This measures intelligibility and format, not subjective beauty.
+
+The same workflow verified draft persistence across reload, project renaming without losing draft words, switching modes without replacing the existing score, saving an unrendered arrangement, undo/redo after creation, invalidating stale exports after a melody change, and layouts at 1440, 1024, and 390 pixels. No JavaScript errors were reported. Receipts and captures are in `artifacts/qa/simple-*`.
+
 ## Results
 
 After the neural singing upgrade, all **10 backend/audio tests** and **4 score/MIDI tests** passed. All three real-browser suites passed: original-engine editing/render/playback/export, pointer editing/MIDI/cancellation, and neural singing with old-project migration, engine switching/undo, audio playback/download, persistence, and mobile layout. TypeScript and the production build passed. Desktop/mobile screenshots were inspected. Generated WAVs and the voice credits in the exported ZIP were independently opened and checked.

@@ -28,6 +28,14 @@ This starts the Python API on port 8765 and Vite on **http://127.0.0.1:5173**. S
 
 ## Compose
 
+Use the **Simple / Advanced** switch at the top. New sessions open in Simple; existing saved sessions keep the full editor until you choose Simple. Switching views does not replace your score.
+
+In **Simple**, enter 2–24 English words, choose **Unhurried / Flowing / Bright** and **Intimate / Warm / Radiant**, then press **Create & listen**. The arranger fits every word to notes, adds four consonant harmonies, stays within G3–D5, and balances expression, ensemble size, and ambience. Line breaks provide breathing space. **New lyrics** cycles through curated starting lines; **Another melody** changes the arrangement while preserving your words. Unknown pronunciations are caught before audio rendering.
+
+Simple drafts persist across reloads. Creating applies a new arrangement; **Undo** restores the previous score. **Save project** includes the planned arrangement and Simple settings even before rendering. **Edit arrangement** opens the planned notes in Advanced for precise changes. These are musical guardrails, not a guarantee that every generated performance will sound natural.
+
+In **Advanced**:
+
 1. Start with **A little light**, the included four-part score. New projects use two neural performances per part. Press **Render choir**, then play. Each new performance takes computation; later mix changes reuse cached vocals. The **Singing engine** selector also provides the faster original renderer. Saved projects retain their engine.
 2. Select a vocal part on the left. Click an empty grid position to add a note; **+ Note** appends one after the part’s last note. Drag notes to change pitch/time and drag their right edge to resize. Each part is monophonic; use other parts for harmony.
 3. Select a note to edit its pitch, start, length, and lyric numerically. Arrow keys move a focused note; Shift+Up/Down changes octaves; Delete removes it. Snap supports one, half, or quarter beats.
@@ -56,6 +64,7 @@ npm run test:audio
 node scripts/verify-ui.mjs
 node scripts/verify-editing.mjs
 node scripts/verify-singing.mjs
+node scripts/verify-simple.mjs
 # Generate a dry, level-matched before/after audio comparison:
 .venv/bin/python scripts/render_comparison.py
 ```

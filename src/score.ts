@@ -32,6 +32,13 @@ export type Score = {
   vibrato: number;
   room: number;
   seed: number;
+  simple?: SimpleSettings | null;
+};
+export type SimpleSettings = {
+  lyrics: string;
+  pace: "slow" | "flowing" | "bright";
+  character: "intimate" | "warm" | "radiant";
+  variation: number;
 };
 export const PARTS: Part[] = ["soprano", "alto", "tenor", "bass"];
 export const COLORS: Record<Part, string> = {

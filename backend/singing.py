@@ -131,16 +131,16 @@ class SingingEngine:
 
     def pronounce(self, lyric):
         if self._dictionary is None:
-            self._dictionary = {
+            dictionary = {
                 word: ["en/" + re.sub(r"\d", "", p).lower() for p in variants[0]]
                 for word, variants in cmudict.dict().items()
             }
             with (self.bank / "dsdur/dsdict-en.yaml").open() as f:
                 overrides = yaml.load(f, Loader=yaml.CSafeLoader)
-            self._dictionary.update(
+            dictionary.update(
                 {e["grapheme"].lower(): e["phonemes"] for e in overrides["entries"]}
             )
-            self._dictionary.update(
+            dictionary.update(
                 {
                     "ah": ["en/aa"],
                     "oh": ["en/ow"],
@@ -150,6 +150,9 @@ class SingingEngine:
                     "mm": ["en/m", "en/ax", "en/m"],
                 }
             )
+            # Publish a complete dictionary atomically; arranging and rendering
+            # may ask for pronunciations on different API worker threads.
+            self._dictionary = dictionary
         words = re.findall(r"[a-z]+(?:'[a-z]+)?", lyric.lower())
         phones = []
         for word in words:

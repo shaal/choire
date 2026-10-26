@@ -19,6 +19,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 try {
   await page.goto("http://127.0.0.1:8765");
   await page.getByText("Voice engine ready", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
   await page.getByText("Saved on this device", { exact: false }).waitFor();
   assert.equal(
     await page.getByLabel("Singing engine", { exact: true }).inputValue(),
