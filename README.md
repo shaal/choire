@@ -2,7 +2,7 @@
 
 A local, working notes-and-lyrics choir studio. Compose soprano, alto, tenor, and bass parts in a piano roll, assign English lyrics, render 1–16 singers per part, and export a stereo WAV or individual stems.
 
-**This is an independent experimental implementation, not a clone of Dreamtonics’ synthesis engine.** It uses Kokoro to generate spoken vocal material and WORLD to resynthesize it at the requested pitches and durations. It produces real score-controlled vocal audio, but it is not a trained singing model. Articulation, sustained vowels, and ensemble realism are substantially below a professional choir product. See [the reference analysis](docs/reference-analysis.md) and [verification](docs/verification.md).
+**This is an independent experimental implementation, not a clone of Dreamtonics’ synthesis engine.** The new DiffSinger renderer generates connected sung phrases with learned pronunciation, pitch, and breath controls, using Nishiren Diffsinger v2.1 by Gardanana. The original Kokoro/WORLD speech-to-singing renderer remains available for comparison. This is still an experimental ensemble of one singing voicebank, not a professional multi-singer choir model. See [voicebank setup and usage terms](docs/voicebank.md), [reference analysis](docs/reference-analysis.md), and [verification](docs/verification.md).
 
 ## Run
 
@@ -11,11 +11,12 @@ Requirements: Node.js 22.12+ (22.x), Python 3.12, and [uv](https://docs.astral.s
 ```sh
 npm install
 npm run setup
+npm run setup:singing
 npm run build
 npm start
 ```
 
-Open **http://127.0.0.1:8765**. The API and UI share the same local server. No API key or paid service is required. The first setup installs Python dependencies and downloads approximately 354 MB of open voice models (or reuses a matching local cache). Subsequent rendering runs locally without network access. Fonts are bundled locally too.
+Open **http://127.0.0.1:8765**. The API and UI share the same local server. No API key or paid service is required. The original engine downloads approximately 354 MB of models; singing setup downloads the complete 624 MB Nishiren archive. Subsequent rendering runs locally without network access. Fonts are bundled locally too. Nishiren permits non-commercial use and requires attribution when publishing; commercial use needs the author's approval. Its full [terms](https://github.com/Gardanana/Nishiren-AI-Diffsinger/blob/main/terms-of-service.md) also contain content restrictions.
 
 For development:
 
@@ -27,13 +28,13 @@ This starts the Python API on port 8765 and Vite on **http://127.0.0.1:5173**. S
 
 ## Compose
 
-1. Start with **A little light**, the included four-part, 16-singer score. Press **Render choir**, then play. The first render loads the model and prepares the words; later renders reuse analyzed syllables.
+1. Start with **A little light**, the included four-part score. New projects use two neural performances per part. Press **Render choir**, then play. Each new performance takes computation; later mix changes reuse cached vocals. The **Singing engine** selector also provides the faster original renderer. Saved projects retain their engine.
 2. Select a vocal part on the left. Click an empty grid position to add a note; **+ Note** appends one after the part’s last note. Drag notes to change pitch/time and drag their right edge to resize. Each part is monophonic; use other parts for harmony.
 3. Select a note to edit its pitch, start, length, and lyric numerically. Arrow keys move a focused note; Shift+Up/Down changes octaves; Delete removes it. Snap supports one, half, or quarter beats.
-4. Enter one word or syllable per note in **Lyrics**, then apply. Use hyphens for syllables, e.g. `to-geth-er`. Extra syllables are ignored with a message; unmatched notes keep their existing lyrics. English is the supported language.
-5. Set voice color, singer count, part volume/pan, pitch/timing variation, vibrato, and room ambience. Mute/solo affects rendering. **New performance** changes the ensemble variation seed, preserving the score.
+4. Enter one English word per note in **Lyrics**, then apply. Neural singing accepts dictionary words and common vowels such as `ah`, `oh`, `oo`, `la`. Unknown words produce an error. The original engine also supports freely spelled syllables split with hyphens. Extra words are ignored with a message; unmatched notes keep their existing lyrics.
+5. Set voice color, singer count, part volume/pan, pitch/timing variation, pitch expression (or original-engine vibrato), and room ambience. Mute/solo affects rendering. **New performance** changes the variation seed, preserving the score. Nishiren's colors are styles of one voice; the published G3–D5 range is flagged when exceeded.
 6. Re-render after edits. Playback/export is marked stale until the new score has been rendered. Undoing to the exact rendered score makes that audio available again.
-7. Export **24-bit / 24 kHz stereo WAV**, or download the **Stems** ZIP (mix, individual WAVs, and score JSON). Exported stems use the same master gain as the mix, so they sum back to it.
+7. Export **24-bit stereo WAV** at 44.1 kHz for neural singing or 24 kHz for the original engine. The **Stems** ZIP includes the mix, individual WAVs, score JSON, and neural voice credits. Stems share the mix's master gain, so they sum back to it.
 
 The piano roll shows a pitch window; use its up/down controls to reach other octaves. Notes are supported from C2–C6, with a maximum score length of 128 beats. Large scores and high singer counts take longer. The API bounds work to 2,048 singer-notes / 40 singer-minutes and one render at a time.
 
@@ -54,6 +55,9 @@ npm run test:audio
 # With npm start running, and Google Chrome installed:
 node scripts/verify-ui.mjs
 node scripts/verify-editing.mjs
+node scripts/verify-singing.mjs
+# Generate a dry, level-matched before/after audio comparison:
+.venv/bin/python scripts/render_comparison.py
 ```
 
 The browser check uses headless Chrome at its standard macOS path. Set `CHROME_PATH` for a different executable. It drives the real engine (no mocked audio), checks playback time advances, downloads the mix/stems, exercises note edits and persistence, and captures desktop/mobile layouts in `artifacts/qa/`.

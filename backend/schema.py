@@ -13,6 +13,12 @@ VOICES = {
     "am_adam": "Adam · deep bass",
     "bm_george": "George · round bass",
 }
+SINGING_VOICES = {
+    "nishiren-standard": "Nishiren · Standard",
+    "nishiren-soft": "Nishiren · Soft",
+    "nishiren-sweet": "Nishiren · Sweet",
+    "nishiren-power": "Nishiren · Power",
+}
 
 
 class StrictModel(BaseModel):
@@ -50,7 +56,7 @@ class Track(StrictModel):
 
     @model_validator(mode="after")
     def check_notes(self):
-        if self.voice not in VOICES:
+        if self.voice not in VOICES and self.voice not in SINGING_VOICES:
             raise ValueError("Unknown voice.")
         if len({n.id for n in self.notes}) != len(self.notes):
             raise ValueError("Note IDs must be unique within a part.")
@@ -65,6 +71,7 @@ class Track(StrictModel):
 
 class Score(StrictModel):
     version: Literal[1] = 1
+    engine: Literal["kokoro-world", "diffsinger"] = "kokoro-world"
     title: str = Field(default="Untitled choir", max_length=100)
     bpm: int = Field(default=84, ge=40, le=200)
     tracks: list[Track] = Field(min_length=1, max_length=4)
@@ -76,6 +83,17 @@ class Score(StrictModel):
 
     @model_validator(mode="after")
     def check_score(self):
+        voices = SINGING_VOICES if self.engine == "diffsinger" else VOICES
+        if any(t.voice not in voices for t in self.tracks):
+            raise ValueError(
+                "The selected voices must match the score's singing engine."
+            )
+        if self.engine == "diffsinger" and any(
+            n.duration * 60 / self.bpm > 16 for t in self.tracks for n in t.notes
+        ):
+            raise ValueError(
+                "Singing notes are limited to 16 seconds. Shorten the note or increase the tempo."
+            )
         if len({t.id for t in self.tracks}) != len(self.tracks):
             raise ValueError("Track IDs must be unique.")
         # Bound expensive native synthesis work, including silent/muted tracks.

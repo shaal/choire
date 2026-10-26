@@ -29,6 +29,8 @@ import PianoRoll from "./PianoRoll";
 import {
   COLORS,
   VOICES,
+  SINGING_VOICES,
+  switchEngine,
   assignLyrics,
   download,
   exportMidi,
@@ -198,9 +200,15 @@ export default function App() {
   const [lyrics, setLyrics] = useState("");
   const [snap, setSnap] = useState(0.5);
   const [zoom, setZoom] = useState(1);
-  const [health, setHealth] = useState<
+  const [connection, setConnection] = useState<
     "loading" | "ready" | "offline" | "setup"
   >("loading");
+  const [engineReady, setEngineReady] = useState<Record<string, boolean>>({});
+  const neural = score.engine === "diffsinger";
+  const health =
+    connection === "ready" && !engineReady[score.engine] ? "setup" : connection;
+  const outsideRange =
+    neural && track.notes.some((n) => n.pitch < 55 || n.pitch > 74);
   const [notice, setNotice] = useState("");
   const [about, setAbout] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
@@ -276,12 +284,19 @@ export default function App() {
   }, []);
   useEffect(() => {
     let gone = false;
-    request<{ modelReady: boolean }>("/api/health")
+    request<{ engines: Record<string, { ready: boolean }> }>("/api/health")
       .then((h) => {
-        if (!gone) setHealth(h.modelReady ? "ready" : "setup");
+        if (!gone) {
+          setEngineReady(
+            Object.fromEntries(
+              Object.entries(h.engines).map(([id, e]) => [id, e.ready]),
+            ),
+          );
+          setConnection("ready");
+        }
       })
       .catch(() => {
-        if (!gone) setHealth("offline");
+        if (!gone) setConnection("offline");
       });
     let saved: string | null = null;
     try {
@@ -541,10 +556,30 @@ export default function App() {
           <Info size={18} />
           <p>
             <strong>An independent, experimental singing studio.</strong>{" "}
-            English words are generated with Kokoro, retuned and stretched with
-            WORLD, then combined into a choir. This is speech-to-singing, not
-            Dreamtonics’ engine or a trained choir model. Long words and extreme
-            pitches can sound artificial. Start with one syllable per note.
+            {neural ? (
+              <>
+                DiffSinger sings connected English phrases with learned
+                pronunciation, pitch, and breath controls. The choir layers
+                separate performances of Nishiren by Gardanana; the four colors
+                are styles of one voice. Best range: G3–D5. Credit Nishiren when
+                publishing. Commercial use needs the author’s approval.{" "}
+                <a
+                  href="https://github.com/Gardanana/Nishiren-AI-Diffsinger/blob/main/terms-of-service.md"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Voicebank terms
+                </a>
+                .
+              </>
+            ) : (
+              <>
+                The original renderer generates speech with Kokoro and retunes
+                it with WORLD. Sustained vowels and transitions can sound
+                artificial. Choose Neural singing to use a trained singing
+                voice.
+              </>
+            )}
           </p>
           <button
             className="icon-button"
@@ -629,8 +664,9 @@ export default function App() {
       )}
       {health === "setup" && (
         <div className="notice" role="alert">
-          Download the local voice model with <code>npm run setup</code>, then
-          restart the application.
+          Download the local voice model with{" "}
+          <code>{neural ? "npm run setup:singing" : "npm run setup"}</code>,
+          then restart the application.
         </div>
       )}
       <main className="workspace">
@@ -848,7 +884,11 @@ export default function App() {
               <h3>
                 Lyrics <span>{track.name}</span>
               </h3>
-              <span>One word or syllable per note</span>
+              <span>
+                {neural
+                  ? "One English word per note"
+                  : "One word or syllable per note"}
+              </span>
             </div>
             <div className="lyrics-input">
               <input
@@ -880,7 +920,16 @@ export default function App() {
               </button>
             </div>
             <div className="lyric-hint">
-              Separate syllables with hyphens, like <span>to-geth-er</span>.
+              {neural ? (
+                <>
+                  Use English dictionary words, or vowels like{" "}
+                  <span>ah, oh, oo, la</span>.
+                </>
+              ) : (
+                <>
+                  Separate syllables with hyphens, like <span>to-geth-er</span>.
+                </>
+              )}{" "}
               Select a note to edit it individually.
             </div>
           </div>
@@ -977,20 +1026,61 @@ export default function App() {
             <SlidersHorizontal size={15} />
           </div>
           <div className="sound-content">
-            <label className="voice-select-label">
-              VOICE COLOR
-              <select
-                aria-label="Voice color"
-                value={track.voice}
-                onChange={(e) => changeTrack({ voice: e.target.value })}
-              >
-                {Object.entries(VOICES).map(([v, n]) => (
-                  <option key={v} value={v}>
-                    {n}
+            <div className="voice-choices">
+              <label className="voice-select-label">
+                SINGING ENGINE
+                <select
+                  aria-label="Singing engine"
+                  value={score.engine}
+                  disabled={!!isRendering}
+                  onChange={(e) =>
+                    edit(switchEngine(score, e.target.value as Score["engine"]))
+                  }
+                >
+                  <option value="diffsinger">
+                    Neural singing · DiffSinger
                   </option>
-                ))}
-              </select>
-            </label>
+                  <option value="kokoro-world">
+                    Original · speech-to-singing
+                  </option>
+                </select>
+              </label>
+              <label className="voice-select-label">
+                VOICE COLOR
+                <select
+                  aria-label="Voice color"
+                  value={track.voice}
+                  onChange={(e) => changeTrack({ voice: e.target.value })}
+                >
+                  {Object.entries(neural ? SINGING_VOICES : VOICES).map(
+                    ([v, n]) => (
+                      <option key={v} value={v}>
+                        {n}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              {neural && (
+                <p className="voice-note">
+                  Nishiren by Gardanana · one voice, four styles.
+                  <br />
+                  Non-commercial use.{" "}
+                  <a
+                    href="https://github.com/Gardanana/Nishiren-AI-Diffsinger/blob/main/terms-of-service.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Usage terms
+                  </a>
+                  {outsideRange && (
+                    <span className="range-note">
+                      This part reaches beyond G3–D5. Vocal quality may vary.
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
             <div className="singers-heading">
               <span>Singers in {track.name.toLowerCase()}</span>
               <strong>{String(track.singers).padStart(2, "0")}</strong>
@@ -1070,10 +1160,13 @@ export default function App() {
               display={`${Math.round(score.timing * 100)}%`}
             />
             <Slider
-              label="Vibrato"
+              label={neural ? "Pitch expression" : "Vibrato"}
               value={score.vibrato}
               onChange={(vibrato) => edit({ ...score, vibrato })}
               display={`${Math.round(score.vibrato * 100)}%`}
+              hint={
+                neural ? "Straight notes → learned pitch movement" : undefined
+              }
             />
             <Slider
               label="Room ambience"
@@ -1245,8 +1338,9 @@ export default function App() {
       <footer className="studio-footer">
         <span>
           <i />
-          EXPERIMENTAL VOICE ENGINE<span className="footer-separator">/</span>
-          English · 24 kHz · Local rendering
+          {neural ? "DIFFSINGER · NISHIREN" : "EXPERIMENTAL VOICE ENGINE"}
+          <span className="footer-separator">/</span>
+          English · {neural ? "44.1" : "24"} kHz · Local rendering
         </span>
         <button
           disabled={!!isRendering}

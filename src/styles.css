@@ -966,9 +966,40 @@ p {
   padding: 19px 18px;
 }
 .voice-select-label {
+  display: block;
   font-size: 8px;
   letter-spacing: 1.3px;
   color: #8e9e89;
+}
+.voice-choices .voice-select-label + .voice-select-label {
+  margin-top: 16px;
+}
+.voice-note {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #aab7a2;
+  margin: 12px 0 0;
+}
+.voice-note a,
+.about-engine a {
+  color: #d9ba85;
+  text-underline-offset: 3px;
+}
+.range-note {
+  display: block;
+  margin-top: 8px;
+  color: #d9ba85;
+}
+@media (max-width: 1200px) {
+  .voice-choices {
+    grid-row: 1;
+  }
+}
+@media (max-width: 640px) {
+  .voice-choices {
+    grid-row: 1;
+    grid-column: 1/-1;
+  }
 }
 .voice-select-label select {
   display: block;

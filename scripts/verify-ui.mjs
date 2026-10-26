@@ -20,6 +20,10 @@ try {
   await page.goto("http://127.0.0.1:8765");
   await page.getByText("Voice engine ready", { exact: true }).waitFor();
   await page.getByText("Saved on this device", { exact: false }).waitFor();
+  // Keep the original renderer's regression coverage; neural flow is separate.
+  await page
+    .getByLabel("Singing engine", { exact: true })
+    .selectOption("kokoro-world");
   await page.screenshot({
     path: "artifacts/qa/studio-desktop.png",
     fullPage: true,

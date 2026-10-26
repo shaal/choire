@@ -6,16 +6,17 @@ import threading
 import time
 import uuid
 import zipfile
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from .engine import ChoirEngine, RenderCancelled, ROOT
-from .schema import Score, VOICES
+from .schema import Score, VOICES, SINGING_VOICES
+from .singing import SingingEngine
 
 app = FastAPI(title="Choire", version="0.1.0")
 engine = ChoirEngine()
+singing_engine = SingingEngine()
 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="choire-render")
 jobs: dict[str, dict] = {}
 job_lock = threading.Lock()
@@ -36,14 +37,31 @@ async def local_request_limits(request: Request, call_next):
 
 @app.get("/api/health")
 def health():
+    neural_ready = singing_engine.available
+    ready = engine.available or neural_ready
     return {
-        "status": "ready" if engine.available else "setup-required",
-        "modelReady": engine.available,
-        "engine": "Kokoro + WORLD",
-        "mode": "experimental speech-to-singing",
+        "status": "ready" if ready else "setup-required",
+        "modelReady": ready,
+        "defaultEngine": "diffsinger" if neural_ready else "kokoro-world",
+        "engine": "DiffSinger · Nishiren" if neural_ready else "Kokoro + WORLD",
+        "mode": "phrase-based neural singing"
+        if neural_ready
+        else "experimental speech-to-singing",
         "language": "English",
-        "sampleRate": 24000,
-        "voices": VOICES,
+        "sampleRate": 44100 if neural_ready else 24000,
+        "voices": SINGING_VOICES if neural_ready else VOICES,
+        "engines": {
+            "kokoro-world": {
+                "ready": engine.available,
+                "sampleRate": 24000,
+                "voices": VOICES,
+            },
+            "diffsinger": {
+                "ready": singing_engine.available,
+                "sampleRate": 44100,
+                "voices": SINGING_VOICES,
+            },
+        },
     }
 
 
@@ -54,8 +72,12 @@ def validate(score: Score):
 
 @app.post("/api/render", status_code=202)
 def render(score: Score):
-    if not engine.available:
-        raise HTTPException(503, "Voice model missing. Run npm run setup.")
+    selected_engine = singing_engine if score.engine == "diffsinger" else engine
+    if not selected_engine.available:
+        command = (
+            "npm run setup:singing" if score.engine == "diffsinger" else "npm run setup"
+        )
+        raise HTTPException(503, f"Voice model missing. Run {command}.")
     if not score.audible_tracks():
         raise HTTPException(422, "Add notes to an unmuted part before rendering.")
     with job_lock:
@@ -87,7 +109,9 @@ def render(score: Score):
             job.update(progress=round(value, 3), message=message)
 
         try:
-            result = engine.render(score, render_root / job_id, progress, job["cancel"])
+            result = selected_engine.render(
+                score, render_root / job_id, progress, job["cancel"]
+            )
             if job["cancel"].is_set():
                 raise RenderCancelled()
             job.update(
@@ -167,7 +191,7 @@ def stems(job_id: str):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
         for path in sorted(folder.iterdir()):
-            if path.suffix in (".wav", ".json"):
+            if path.suffix in (".wav", ".json", ".txt"):
                 z.write(path, path.name)
     return Response(
         buffer.getvalue(),

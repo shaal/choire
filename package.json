@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "setup": "uv venv --python 3.12 --allow-existing .venv && uv pip install --python .venv/bin/python -r requirements.txt && .venv/bin/python scripts/setup.py",
+    "setup": "uv venv --python 3.12 --allow-existing .venv && uv pip install --python .venv/bin/python -r requirements-lock.txt && .venv/bin/python scripts/setup.py",
+    "setup:singing": "uv venv --python 3.12 --allow-existing .venv && uv pip install --python .venv/bin/python -r requirements-lock.txt && .venv/bin/python scripts/setup_singing.py",
     "dev": "node scripts/run.mjs --dev",
     "build": "tsc -b && vite build",
     "start": "node scripts/run.mjs",

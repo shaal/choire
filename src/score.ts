@@ -23,6 +23,7 @@ export type Track = {
 };
 export type Score = {
   version: 1;
+  engine: "kokoro-world" | "diffsinger";
   title: string;
   bpm: number;
   tracks: Track[];
@@ -49,8 +50,40 @@ export const VOICES: Record<string, string> = {
   am_adam: "Adam · deep bass",
   bm_george: "George · round bass",
 };
+export const SINGING_VOICES: Record<string, string> = {
+  "nishiren-standard": "Nishiren · Standard",
+  "nishiren-soft": "Nishiren · Soft",
+  "nishiren-sweet": "Nishiren · Sweet",
+  "nishiren-power": "Nishiren · Power",
+};
+export function switchEngine(score: Score, engine: Score["engine"]): Score {
+  const voices =
+    engine === "diffsinger"
+      ? [
+          "nishiren-standard",
+          "nishiren-soft",
+          "nishiren-sweet",
+          "nishiren-power",
+        ]
+      : ["af_heart", "af_nicole", "am_fenrir", "am_adam"];
+  return {
+    ...score,
+    engine,
+    tracks: score.tracks.map((t) => ({
+      ...t,
+      voice: voices[PARTS.indexOf(t.part)],
+    })),
+  };
+}
 export const newId = () => crypto.randomUUID();
-export const initialScore = () => structuredClone(demo) as Score;
+export const initialScore = () => {
+  const score = switchEngine(structuredClone(demo) as Score, "diffsinger");
+  score.tracks.forEach((t) => {
+    t.singers = 2;
+  });
+  score.vibrato = 0.85;
+  return score;
+};
 export const noteName = (pitch: number) =>
   ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"][
     pitch % 12
