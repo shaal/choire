@@ -1,0 +1,62 @@
+{
+  "sourceCommit": "385e39f121c7dad27c578f93f82f7dde0df066d8",
+  "capturedAt": "2026-10-26T18:25:36.645Z",
+  "browser": "Chrome 156.0.8078.48",
+  "deviceScaleFactor": 2,
+  "isolatedContexts": true,
+  "shippedScoreVerified": true,
+  "defaultSimpleSettings": {
+    "lyrics": "May our light shine on",
+    "pace": "flowing",
+    "character": "warm",
+    "variation": 0
+  },
+  "realAudioRender": true,
+  "screenshots": [
+    {
+      "file": "simple-studio.png",
+      "state": "Fresh Simple studio: default Flowing pace, Warm feeling, and demo lyrics",
+      "viewport": {
+        "width": 1440,
+        "height": 1120
+      },
+      "pixelWidth": 2880,
+      "pixelHeight": 2240,
+      "sha256": "63e92ff36eec111815bcfed21800cf9f75e9c2d44e470721cd0ab4504e0fbea0"
+    },
+    {
+      "file": "advanced-studio.png",
+      "state": "Default Advanced studio with the first note selected for inspection; nothing edited",
+      "viewport": {
+        "width": 1440,
+        "height": 1120
+      },
+      "pixelWidth": 2880,
+      "pixelHeight": 2664,
+      "sha256": "0805744797c8fdc48d0dcf914a2f16debffacc0dc6308cab15e01e88b5acc84f"
+    },
+    {
+      "file": "render-and-export.png",
+      "state": "Real completed neural render using only the default Simple choices; playback stopped, WAV and stems available",
+      "viewport": {
+        "width": 1440,
+        "height": 1120
+      },
+      "pixelWidth": 2880,
+      "pixelHeight": 2362,
+      "sha256": "301c90cece945917352387a02efb4ed1a010125de99226a75237e79da624a1f8"
+    },
+    {
+      "file": "mobile-studio.png",
+      "state": "Fresh mobile Simple studio with all default settings",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pixelWidth": 780,
+      "pixelHeight": 3804,
+      "sha256": "4fe867ed2aed2619cd32f0dca4fe5c16ab7437409b03688d0ec51efe51c5225e"
+    }
+  ],
+  "consoleErrors": []
+}

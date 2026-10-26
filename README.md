@@ -4,6 +4,37 @@ A local, working notes-and-lyrics choir studio. Compose soprano, alto, tenor, an
 
 **This is an independent experimental implementation, not a clone of Dreamtonics’ synthesis engine.** The new DiffSinger renderer generates connected sung phrases with learned pronunciation, pitch, and breath controls, using Nishiren Diffsinger v2.1 by Gardanana. The original Kokoro/WORLD speech-to-singing renderer remains available for comparison. This is still an experimental ensemble of one singing voicebank, not a professional multi-singer choir model. See [voicebank setup and usage terms](docs/voicebank.md), [reference analysis](docs/reference-analysis.md), and [verification](docs/verification.md).
 
+## Screenshots
+
+Real app captures from fresh browser sessions using the bundled **A little light** demo and shipped settings. The default lyrics are **“May our light shine on”**, with **Flowing** pace and **Warm** feeling.
+
+### Simple studio
+
+Lyrics, pace, and choir character in one view.
+
+![Simple studio with the default lyrics, Flowing pace, and Warm feeling](docs/screenshots/simple-studio.png)
+
+### Advanced studio
+
+The bundled four-part score, piano roll, and voice controls. The first note is selected to show its inspector; no notes or settings were edited.
+
+![Advanced studio showing the default score and selected-note inspector](docs/screenshots/advanced-studio.png)
+
+### Render and export
+
+After pressing **Create & listen** with the default Simple settings: a real neural render, its waveform, and the WAV and stems downloads.
+
+![Completed default choir render with its waveform and export controls](docs/screenshots/render-and-export.png)
+
+<details>
+<summary>Mobile studio — the same defaults on a narrow screen</summary>
+
+<p><img src="docs/screenshots/mobile-studio.png" width="390" alt="Mobile Simple studio with the default lyrics, Flowing pace, and Warm feeling"></p>
+
+</details>
+
+To refresh these captures, run `node scripts/capture-readme.mjs` with the app running and Google Chrome installed. It opens isolated browser contexts, verifies the defaults, and performs a real audio render. Set `CHROME_PATH` for a different Chrome executable or `CHOIRE_URL` for a different app address. [Capture details](docs/screenshots/capture.json) record the source revision and image hashes.
+
 ## Run
 
 Requirements: Node.js 22.12+ (22.x), Python 3.12, and [uv](https://docs.astral.sh/uv/). Tested on macOS / Apple Silicon.
