@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.venv/
+.models/
+.renders/
+.cache/
+__pycache__/
+.pytest_cache/
+artifacts/
+*.log
+.DS_Store
+
+.ruff_cache/
+*.tsbuildinfo

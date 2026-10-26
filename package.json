@@ -1,0 +1,31 @@
+{
+  "name": "choire-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "uv venv --python 3.12 --allow-existing .venv && uv pip install --python .venv/bin/python -r requirements.txt && .venv/bin/python scripts/setup.py",
+    "dev": "node scripts/run.mjs --dev",
+    "build": "tsc -b && vite build",
+    "start": "node scripts/run.mjs",
+    "test": "vitest run",
+    "test:audio": ".venv/bin/python -m pytest tests -q"
+  },
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.2.8",
+    "@tonejs/midi": "^2.0.28",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "~5.7.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "title": "A little light",
+  "bpm": 84,
+  "dispersion": 0.35,
+  "timing": 0.3,
+  "vibrato": 0.35,
+  "room": 0.3,
+  "seed": 42,
+  "tracks": [
+    {
+      "id": "soprano",
+      "name": "Soprano",
+      "part": "soprano",
+      "voice": "af_heart",
+      "singers": 4,
+      "gain": 0.8,
+      "pan": -0.35,
+      "mute": false,
+      "solo": false,
+      "notes": [
+        {
+          "id": "soprano-0",
+          "pitch": 69,
+          "start": 0,
+          "duration": 2,
+          "lyric": "May",
+          "velocity": 0.8
+        },
+        {
+          "id": "soprano-1",
+          "pitch": 70,
+          "start": 2,
+          "duration": 2,
+          "lyric": "our",
+          "velocity": 0.8
+        },
+        {
+          "id": "soprano-2",
+          "pitch": 72,
+          "start": 4,
+          "duration": 4,
+          "lyric": "light",
+          "velocity": 0.8
+        },
+        {
+          "id": "soprano-3",
+          "pitch": 67,
+          "start": 8,
+          "duration": 4,
+          "lyric": "shine",
+          "velocity": 0.8
+        },
+        {
+          "id": "soprano-4",
+          "pitch": 69,
+          "start": 12,
+          "duration": 4,
+          "lyric": "on",
+          "velocity": 0.8
+        }
+      ]
+    },
+    {
+      "id": "alto",
+      "name": "Alto",
+      "part": "alto",
+      "voice": "af_sarah",
+      "singers": 4,
+      "gain": 0.8,
+      "pan": -0.1,
+      "mute": false,
+      "solo": false,
+      "notes": [
+        {
+          "id": "alto-0",
+          "pitch": 65,
+          "start": 0,
+          "duration": 2,
+          "lyric": "May",
+          "velocity": 0.8
+        },
+        {
+          "id": "alto-1",
+          "pitch": 65,
+          "start": 2,
+          "duration": 2,
+          "lyric": "our",
+          "velocity": 0.8
+        },
+        {
+          "id": "alto-2",
+          "pitch": 65,
+          "start": 4,
+          "duration": 4,
+          "lyric": "light",
+          "velocity": 0.8
+        },
+        {
+          "id": "alto-3",
+          "pitch": 64,
+          "start": 8,
+          "duration": 4,
+          "lyric": "shine",
+          "velocity": 0.8
+        },
+        {
+          "id": "alto-4",
+          "pitch": 65,
+          "start": 12,
+          "duration": 4,
+          "lyric": "on",
+          "velocity": 0.8
+        }
+      ]
+    },
+    {
+      "id": "tenor",
+      "name": "Tenor",
+      "part": "tenor",
+      "voice": "am_fenrir",
+      "singers": 4,
+      "gain": 0.8,
+      "pan": 0.15,
+      "mute": false,
+      "solo": false,
+      "notes": [
+        {
+          "id": "tenor-0",
+          "pitch": 62,
+          "start": 0,
+          "duration": 2,
+          "lyric": "May",
+          "velocity": 0.8
+        },
+        {
+          "id": "tenor-1",
+          "pitch": 62,
+          "start": 2,
+          "duration": 2,
+          "lyric": "our",
+          "velocity": 0.8
+        },
+        {
+          "id": "tenor-2",
+          "pitch": 60,
+          "start": 4,
+          "duration": 4,
+          "lyric": "light",
+          "velocity": 0.8
+        },
+        {
+          "id": "tenor-3",
+          "pitch": 60,
+          "start": 8,
+          "duration": 4,
+          "lyric": "shine",
+          "velocity": 0.8
+        },
+        {
+          "id": "tenor-4",
+          "pitch": 62,
+          "start": 12,
+          "duration": 4,
+          "lyric": "on",
+          "velocity": 0.8
+        }
+      ]
+    },
+    {
+      "id": "bass",
+      "name": "Bass",
+      "part": "bass",
+      "voice": "am_michael",
+      "singers": 4,
+      "gain": 0.8,
+      "pan": 0.4,
+      "mute": false,
+      "solo": false,
+      "notes": [
+        {
+          "id": "bass-0",
+          "pitch": 50,
+          "start": 0,
+          "duration": 2,
+          "lyric": "May",
+          "velocity": 0.8
+        },
+        {
+          "id": "bass-1",
+          "pitch": 46,
+          "start": 2,
+          "duration": 2,
+          "lyric": "our",
+          "velocity": 0.8
+        },
+        {
+          "id": "bass-2",
+          "pitch": 53,
+          "start": 4,
+          "duration": 4,
+          "lyric": "light",
+          "velocity": 0.8
+        },
+        {
+          "id": "bass-3",
+          "pitch": 48,
+          "start": 8,
+          "duration": 4,
+          "lyric": "shine",
+          "velocity": 0.8
+        },
+        {
+          "id": "bass-4",
+          "pitch": 50,
+          "start": 12,
+          "duration": 4,
+          "lyric": "on",
+          "velocity": 0.8
+        }
+      ]
+    }
+  ]
+}
